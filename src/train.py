@@ -45,12 +45,12 @@ def PAL_loss(attribution, prior_heatmap, channels):
         
     return total_PAL
         
-        
-def grad_input(output_vector, intermediate_layer):
+
+@tf.custom_gradient
+def grad_input(intermediate_layer, output_vector):
     
     
     
-def calculate_attribution():
     
-    attribution = ...
-    return attribution
+    return ...
+    
