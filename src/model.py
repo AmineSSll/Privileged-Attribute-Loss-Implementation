@@ -4,78 +4,53 @@ from tensorflow import keras
 from keras.layers import Layer, Conv2D, MaxPool2D, Flatten, Dense
 from train import *
 
-
-
-def create_prior_heatmap(sigma):
-    pass
     
-    model = keras.Sequential()
+class PAL_model(keras.Model):
     
-    model.add(Conv2D(input_shape=(224,224,3),filters=64,kernel_size=(3,3),padding="same", activation="relu"))
-    model.add(Conv2D(filters=64,kernel_size=(3,3),padding="same", activation="relu"))
-    
-    model.add(MaxPool2D(pool_size=(2,2),strides=(2,2)))
-    
-    model.add(Conv2D(filters=128, kernel_size=(3,3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=128, kernel_size=(3,3), padding="same", activation="relu"))
-    
-    model.add(MaxPool2D(pool_size=(2,2),strides=(2,2)))
-    
-    model.add(Conv2D(filters=256, kernel_size=(3,3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=256, kernel_size=(3,3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=256, kernel_size=(3,3), padding="same", activation="relu"))
-    
-    model.add(MaxPool2D(pool_size=(2,2),strides=(2,2)))
-    
-    model.add(Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
-    
-    model.add(MaxPool2D(pool_size=(2,2),strides=(2,2)))
-    
-    model.add(Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
-    model.add(Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
-    
-    model.add(MaxPool2D(pool_size=(2,2),strides=(2,2)))
-    
-    model.add(Flatten())
-    model.add(Dense(units=4096,activation="relu"))
-    model.add(Dense(units=4096,activation="relu"))
-    model.add(Dense(units=2, activation="softmax"))
-    
-    return model
-
-    
-class PAL_model(keras.model):
-    
-    def __init__(self, n_PAL_layer, backbone):
+    def __init__(self, n_PAL_layer, weights_path, backbone = 'resnet50', ):
         
-        super.__init__()
-        self.backbone = None # CNN backbone to use
+        super().__init__()
         self.n_PAL_layer = n_PAL_layer
-        self.model = keras.Sequential()
-    
-
-    def call(self, inputs):
+        self.weights_path = weights_path
+        # Backbone CNN model choice
+        if backbone == 'vgg16':
         
-        # VGG16 Backbone CNN model if used in argument
-        if self.backbone == 'vgg16':
+            self.backbone = keras.applications.ResNet50()
         
-            self.backbone = keras.applications.ResNet50(input_tensor = inputs)
-        
-        # ResNet50 default CNN otherwise
+        # ResNet50 as default CNN backbone otherwise
         else:
             
-            self.backbone = keras.applications.VGG16(input_tensor = inputs)
+            self.backbone = keras.applications.VGG16()
+
+        # build model with an input shape of 224,224,3 (image size)
+        self.build((None, 224, 224, 3))
+
+    def call(self, inputs):
+            
+        return self.backbone(inputs)
             
     
     def train_step(self, data):
-        
+
+        # Unpack the data. Its structure depends on your model and
+        # on what you pass to `fit()`.
         x, y = data
-        
-        
+    
         with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)  # Forward pass
+            # Compute the loss value
+            # (the loss function is configured in `compile()`)
+            loss = self.compiled_loss(y, y_pred, regularization_losses=self.losses)
+    
+        # Compute gradients
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+        # Update weights
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        # Update metrics (includes the metric that tracks the loss)
+        self.compiled_metrics.update_state(y, y_pred)
+        # Return a dict mapping metric names to current value
+        return {m.name: m.result() for m in self.metrics}
             
         
     def test_step(self, data):
@@ -170,3 +145,5 @@ class VGG16Attribution(keras.Model):
     x = self.dense2(x)
     x = self.dense3(x)
     return x
+
+
